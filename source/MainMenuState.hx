@@ -64,7 +64,9 @@ class MainMenuState extends MusicBeatState
 		'extras',
 		'options'
 	];
-
+	
+    var rightOption:String = null;
+	
 	var magenta:FlxSprite;
 	var camFollow:FlxObject;
 	var camFollowPos:FlxObject;
