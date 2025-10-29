@@ -65,6 +65,8 @@ class MainMenuState extends MusicBeatState
 		#if !switch 'discord' #end
 	];
 
+	var rightOption:String = null;
+
 	var magenta:FlxSprite;
 	var camFollow:FlxObject;
 	var camFollowPos:FlxObject;
