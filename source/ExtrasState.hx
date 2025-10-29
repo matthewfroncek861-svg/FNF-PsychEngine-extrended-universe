@@ -20,19 +20,28 @@ import lime.app.Application;
 import Achievements;
 import editors.MasterEditorMenu;
 import flixel.input.keyboard.FlxKey;
-import flash.system.System;
 
 using StringTools;
 
-class ExtrasState extends MusicBeatState
+enum MainMenuColumn {
+	LEFT;
+	CENTER;
+	RIGHT;
+}
+
+class MainMenuState extends MusicBeatState
 {
 	public static var psychEngineVersion:String = '0.6.3'; //This is also used for Discord RPC
+	public static var curColumn:MainMenuColumn = CENTER;
 	public static var curSelected:Int = 0;
 
 	var menuItems:FlxTypedGroup<FlxSprite>;
 	private var camGame:FlxCamera;
 	private var camAchievement:FlxCamera;
 		
+	var leftItem:FlxSprite;
+	var rightItem:FlxSprite;
+
 	var coolPos:Array<Float> = [
 		97.8,
 		498.7,
@@ -47,7 +56,10 @@ class ExtrasState extends MusicBeatState
 		#end
 	];
 
-	var optionShit:Array<String> = [
+	//Centered/Text options
+	var optionShit:Array<String> = [];
+
+	var leftOption:Array<String> = [
 		#if MODS_ALLOWED 'mods', #end
 		'credits',
 		#if !switch 'discord' #end
@@ -120,17 +132,17 @@ class ExtrasState extends MusicBeatState
 
 		for (i in 0...optionShit.length)
 		{
-			var offset:Float = 108 - (Math.max(optionShit.length, 4) - 4) * 80;
-			var upDown:Bool = (i > 2);
-			var menuThing:FlxSprite = new FlxSprite(coolPos[i], upDown ? 367.65 : 20);
-			trace(coolPos[i]);
-			menuThing.antialiasing = ClientPrefs.globalAntialiasing;
-			menuThing.frames = Paths.getSparrowAtlas('menuStuff');
-			menuThing.animation.addByPrefix('idle', optionShit[i] + '0');
-			menuThing.animation.addByPrefix('selected', optionShit[i] + '_SELECTED');
-			menuThing.animation.play('idle');
-			menuThing.ID = i;
-			menuItems.add(menuThing);
+			        var offset:Float = 108 - (Math.max(optionShit.length, 4) - 4) * 80;
+			        var upDown:Bool = (i > 2);
+				var menuThing:FlxSprite = new FlxSprite(coolPos[i], upDown ? 367.65 : 20);
+				trace(coolPos[i]);
+				menuThing.antialiasing = ClientPrefs.globalAntialiasing;
+				menuThing.frames = Paths.getSparrowAtlas('menuStuff');
+				menuThing.animation.addByPrefix('idle', optionShit[i] + '0');
+				menuThing.animation.addByPrefix('selected', optionShit[i] + '_SELECTED');
+				menuThing.animation.play('idle');
+				menuThing.ID = i;
+				menuItems.add(menuThing);
 		}
 
 		FlxG.camera.follow(camFollowPos, null, 1);
@@ -189,17 +201,109 @@ class ExtrasState extends MusicBeatState
 		if (!selectedSomethin)
 		{
 			if (controls.UI_UP_P)
-			{
-				FlxG.sound.play(Paths.sound('scrollMenu'));
 				changeItem(-1);
-			}
 
 			if (controls.UI_DOWN_P)
-			{
-				FlxG.sound.play(Paths.sound('scrollMenu'));
 				changeItem(1);
+
+			var allowMouse:Bool = allowMouse;
+			if (allowMouse && ((FlxG.mouse.deltaScreenX != 0 && FlxG.mouse.deltaScreenY != 0) || FlxG.mouse.justPressed)) //FlxG.mouse.deltaScreenX/Y checks is more accurate than FlxG.mouse.justMoved
+			{
+				allowMouse = false;
+				FlxG.mouse.visible = true;
+				timeNotMoving = 0;
+
+				var selectedItem:FlxSprite;
+				switch(curColumn)
+				{
+					case CENTER:
+						selectedItem = menuItems.members[curSelected];
+					case LEFT:
+						selectedItem = leftItem;
+					case RIGHT:
+						selectedItem = rightItem;
+				}
+
+				if(leftItem != null && FlxG.mouse.overlaps(leftItem))
+				{
+					allowMouse = true;
+					if(selectedItem != leftItem)
+					{
+						curColumn = LEFT;
+						changeItem();
+					}
+				}
+				else if(rightItem != null && FlxG.mouse.overlaps(rightItem))
+				{
+					allowMouse = true;
+					if(selectedItem != rightItem)
+					{
+						curColumn = RIGHT;
+						changeItem();
+					}
+				}
+				else
+				{
+					var dist:Float = -1;
+					var distItem:Int = -1;
+					for (i in 0...optionShit.length)
+					{
+						var memb:FlxSprite = menuItems.members[i];
+						if(FlxG.mouse.overlaps(memb))
+						{
+							var distance:Float = Math.sqrt(Math.pow(memb.getGraphicMidpoint().x - FlxG.mouse.screenX, 2) + Math.pow(memb.getGraphicMidpoint().y - FlxG.mouse.screenY, 2));
+							if (dist < 0 || distance < dist)
+							{
+								dist = distance;
+								distItem = i;
+								allowMouse = true;
+							}
+						}
+					}
+
+					if(distItem != -1 && selectedItem != menuItems.members[distItem])
+					{
+						curColumn = CENTER;
+						curSelected = distItem;
+						changeItem();
+					}
+				}
+			}
+			else
+			{
+				timeNotMoving += elapsed;
+				if(timeNotMoving > 2) FlxG.mouse.visible = false;
 			}
 
+			switch(curColumn)
+			{
+				case CENTER:
+					if(controls.UI_LEFT_P && leftOption != null)
+					{
+						curColumn = LEFT;
+						changeItem();
+					}
+					else if(controls.UI_RIGHT_P && rightOption != null)
+					{
+						curColumn = RIGHT;
+						changeItem();
+					}
+
+				case LEFT:
+					if(controls.UI_RIGHT_P)
+					{
+						curColumn = CENTER;
+						changeItem();
+					}
+
+				case RIGHT:
+					if(controls.UI_LEFT_P)
+					{
+						curColumn = CENTER;
+						changeItem();
+					}
+			}
+				
 			if (controls.BACK)
 			{
 				selectedSomethin = true;
@@ -207,11 +311,117 @@ class ExtrasState extends MusicBeatState
 				MusicBeatState.switchState(new TitleState());
 			}
 
+		if (!selectedSomethin)
+		{
+			if (controls.UI_UP_P)
+				changeItem(-1);
+
+			if (controls.UI_DOWN_P)
+				changeItem(1);
+
+			var allowMouse:Bool = allowMouse;
+			if (allowMouse && ((FlxG.mouse.deltaScreenX != 0 && FlxG.mouse.deltaScreenY != 0) || FlxG.mouse.justPressed)) //FlxG.mouse.deltaScreenX/Y checks is more accurate than FlxG.mouse.justMoved
+			{
+				allowMouse = false;
+				FlxG.mouse.visible = true;
+				timeNotMoving = 0;
+
+				var selectedItem:FlxSprite;
+				switch(curColumn)
+				{
+					case CENTER:
+						selectedItem = menuItems.members[curSelected];
+					case LEFT:
+						selectedItem = leftItem;
+					case RIGHT:
+						selectedItem = rightItem;
+				}
+
+				if(leftItem != null && FlxG.mouse.overlaps(leftItem))
+				{
+					allowMouse = true;
+					if(selectedItem != leftItem)
+					{
+						curColumn = LEFT;
+						changeItem();
+					}
+				}
+				else if(rightItem != null && FlxG.mouse.overlaps(rightItem))
+				{
+					allowMouse = true;
+					if(selectedItem != rightItem)
+					{
+						curColumn = RIGHT;
+						changeItem();
+					}
+				}
+				else
+				{
+					var dist:Float = -1;
+					var distItem:Int = -1;
+					for (i in 0...optionShit.length)
+					{
+						var memb:FlxSprite = menuItems.members[i];
+						if(FlxG.mouse.overlaps(memb))
+						{
+							var distance:Float = Math.sqrt(Math.pow(memb.getGraphicMidpoint().x - FlxG.mouse.screenX, 2) + Math.pow(memb.getGraphicMidpoint().y - FlxG.mouse.screenY, 2));
+							if (dist < 0 || distance < dist)
+							{
+								dist = distance;
+								distItem = i;
+								allowMouse = true;
+							}
+						}
+					}
+
+					if(distItem != -1 && selectedItem != menuItems.members[distItem])
+					{
+						curColumn = CENTER;
+						curSelected = distItem;
+						changeItem();
+					}
+				}
+			}
+			else
+			{
+				timeNotMoving += elapsed;
+				if(timeNotMoving > 2) FlxG.mouse.visible = false;
+			}
+
+			switch(curColumn)
+			{
+				case CENTER:
+					if(controls.UI_LEFT_P && leftOption != null)
+					{
+						curColumn = LEFT;
+						changeItem();
+					}
+					else if(controls.UI_RIGHT_P && rightOption != null)
+					{
+						curColumn = RIGHT;
+						changeItem();
+					}
+
+				case LEFT:
+					if(controls.UI_RIGHT_P)
+					{
+						curColumn = CENTER;
+						changeItem();
+					}
+
+				case RIGHT:
+					if(controls.UI_LEFT_P)
+					{
+						curColumn = CENTER;
+						changeItem();
+					}
+			}
+
 			if (controls.ACCEPT)
 			{
-				if (optionShit[curSelected] == 'discord')
+				if (optionShit[curSelected] == 'donate')
 				{
-					System.exit(0);
+					CoolUtil.browserLoad('https://ninja-muffin24.itch.io/funkin');
 				}
 				else
 				{
@@ -240,7 +450,6 @@ class ExtrasState extends MusicBeatState
 
 								switch (daChoice)
 								{
-									case 'play':
 									#if MODS_ALLOWED
 									case 'mods':
 										MusicBeatState.switchState(new ModsMenuState());
@@ -274,10 +483,20 @@ class ExtrasState extends MusicBeatState
 	{
 		curSelected += huh;
 
-		if (curSelected >= menuItems.length)
-			curSelected = 0;
-		if (curSelected < 0)
-			curSelected = menuItems.length - 1;
+
+		var selectedItem:FlxSprite;
+		switch(curColumn)
+		{
+			case CENTER:
+				selectedItem = menuItems.members[curSelected];
+			case LEFT:
+				selectedItem = leftItem;
+			case RIGHT:
+				selectedItem = rightItem;
+		}
+		selectedItem.animation.play('selected');
+		selectedItem.centerOffsets();
+		camFollow.y = selectedItem.getGraphicMidpoint().y;
 
 		menuItems.forEach(function(spr:FlxSprite)
 		{
